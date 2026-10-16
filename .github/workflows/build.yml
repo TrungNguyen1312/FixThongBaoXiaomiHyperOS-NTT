@@ -1,1 +1,55 @@
+name: Build APK
 
+on: [push, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Prepare signing key
+        env:
+          KS_B64: ${{ secrets.KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=$KS_ALIAS" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=${KEY_PASS:-$KS_PASS}" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -keystore "$RUNNER_TEMP/ci.jks" -storepass fixtbntt -keypass fixtbntt \
+              -alias fixtbntt -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=FixTB NTT"
+            echo "KEYSTORE_PATH=$RUNNER_TEMP/ci.jks" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=fixtbntt" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=fixtbntt" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=fixtbntt" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build release APK
+        run: gradle assembleRelease -x lintVitalRelease --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk FixTB-NTT.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FixTB-NTT-apk
+          path: FixTB-NTT.apk
