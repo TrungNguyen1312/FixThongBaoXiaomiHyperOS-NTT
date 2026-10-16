@@ -44,7 +44,7 @@ jobs:
           fi
 
       - name: Build release APK
-        run: gradle assembleRelease -x lintVitalRelease --no-daemon --stacktrace
+        run: gradle assembleRelease --no-daemon --stacktrace
 
       - name: Rename APK
         run: cp app/build/outputs/apk/release/app-release.apk FixTB-NTT.apk
